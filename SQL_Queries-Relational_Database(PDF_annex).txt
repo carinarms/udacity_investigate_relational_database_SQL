@@ -1,0 +1,106 @@
+/* Query 1 - Query used to answer the first question. */
+
+
+SELECT	film_title, 
+	category_name, 
+	COUNT(rental_id) rental_count
+
+FROM	(SELECT	f.title film_title, 
+	   	c.name category_name, 
+       		r.rental_id rental_id
+	FROM category c
+	JOIN film_category fc
+	ON c.category_id = fc.category_id
+	JOIN film f
+	ON fc.film_id = f.film_id
+	JOIN inventory i
+	ON f.film_id = i.film_id
+	JOIN rental r
+	ON i.inventory_id = r.inventory_id
+	WHERE c.name IN ('Animation', 'Children', 'Classics', 'Comedy', 'Family', 'Music')
+	) family_films
+
+GROUP BY 1, 2
+ORDER BY 2, 1;
+
+
+
+/* Query 2 - Query used to answer the second question. */
+
+
+WITH fam_f AS	(SELECT c.name category_name, 
+       			f.rental_duration,
+			NTILE(4) OVER (ORDER BY f.rental_duration) standard_quartile
+		FROM category c
+		JOIN film_category fc
+		ON c.category_id = fc.category_id
+		JOIN film f
+		ON fc.film_id = f.film_id
+		WHERE c.name IN ('Animation', 'Children', 'Classics', 'Comedy', 'Family', 'Music')
+		)
+
+SELECT 	category_name, 
+	standard_quartile,
+	COUNT(standard_quartile)
+FROM fam_f
+
+GROUP BY 1, 2
+ORDER BY 1, 2;
+
+
+
+/* Query 3 - Query used to answer the third question. */
+
+
+WITH top AS 	(SELECT p.customer_id,
+			CONCAT(c.first_name, ' ', c.last_name) full_name, 
+			SUM(p.amount) pay_amount
+  		FROM payment p
+  		JOIN customer c
+  		ON p.customer_id = c.customer_id
+  		GROUP BY 1, 2
+  		ORDER BY 3 DESC
+  		LIMIT 10)
+  
+SELECT 	DATE_TRUNC('month', p.payment_date) pay_mon, 
+	t.full_name, 
+	COUNT(*) pay_count_per_mon, 
+	SUM(p.amount) pay_amount
+FROM top t
+JOIN payment p
+ON t.customer_id = p.customer_id
+WHERE DATE_TRUNC('month', p.payment_date) BETWEEN '2007-01-01' AND '2008-01-01'
+
+GROUP BY 1,2
+ORDER BY 2,1;
+
+
+
+/* Query 4 - Query used to answer the forth question. */
+
+
+WITH 	top AS	(SELECT c.customer_id,
+			CONCAT(c.first_name, ' ', c.last_name) full_name,
+          		SUM(p.amount) pay_amount
+          		FROM payment p
+          		JOIN customer c
+          		ON p.customer_id = c.customer_id
+          		GROUP BY 2, 1
+          		ORDER BY 3 DESC
+          		LIMIT 10),
+
+	fin AS	(SELECT	DATE_TRUNC('month', p.payment_date) pay_mon, 
+			t.full_name, 
+			COUNT(*) pay_count_per_mon, 
+			SUM(p.amount) pay_amount
+		FROM top t
+		JOIN payment p
+		ON t.customer_id = p.customer_id
+		WHERE DATE_TRUNC('month', p.payment_date) BETWEEN '2007-01-01' AND '2008-01-01'
+		GROUP BY 2,1
+		ORDER BY 2,1)
+
+SELECT	*,
+	pay_amount - LAG(pay_amount) OVER (PARTITION BY full_name ORDER BY full_name) lag_difference,
+	LAG(pay_amount) OVER (PARTITION BY full_name ORDER BY full_name) lag
+FROM fin;
